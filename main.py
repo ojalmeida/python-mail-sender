@@ -2,6 +2,7 @@ import csv
 import smtplib
 import os
 import time
+from getpass import getpass
 
 
 def load_recipients(path):
@@ -31,16 +32,40 @@ def prepare_recipient(recipient):
 
 
 def get_message():
+    def add_message():
+        found_file = False
+        while not found_file:
+            clear()
+            print('# Extern message file')
+            path = input('\n File path: ')
+            try:
+                file = open(path, newline='')
+                found_file = True
+                message = file.readlines()
+                return message
+            except OSError:
+                print('\nFile not found')
+                time.sleep(3)
+
+
     print(
-        'Type the email, using the patterns. Press Enter for insert new line, type \'-p\' for new paragraph% and type '
+        'Type the email, using the patterns. Press Enter for insert new line, type \'-p\' for new paragraph% or '
         '\'-end\' to finish input ')
+    print('\n(Or type -insert to add extern message file)')
     message = []
     line = input()
-    while line != '-end':
-        if line == '-p':
+    ended = False
+    while not ended:
+        if line == '-end':
+            ended = True
+        elif line == '-p':
             line = ''
-        message.append(line)
-        line = input()
+        elif line == '-insert':
+            message = add_message()
+            ended = True
+        else:
+            message.append(line)
+            line = input()
 
     return message
 
