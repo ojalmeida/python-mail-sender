@@ -1,6 +1,7 @@
 import csv
 import smtplib
 import os
+import time
 
 
 def load_recipients(path):
@@ -30,8 +31,9 @@ def prepare_recipient(recipient):
 
 
 def get_message():
-    print('Type the email, using the patterns. Press Enter for insert new line, type \'-p\' for new paragraph% and type '
-          '\'-end\' to finish input ')
+    print(
+        'Type the email, using the patterns. Press Enter for insert new line, type \'-p\' for new paragraph% and type '
+        '\'-end\' to finish input ')
     message = []
     line = input()
     while line != '-end':
@@ -44,8 +46,7 @@ def get_message():
 
 
 def prepare_message(subject, message, recipient, patterns):
-
-    prepared_message = 'Subject: {}\n'.format(subject).encode('iso-8859-1')
+    prepared_message = 'Subject: {}\n\n'.format(subject).encode('iso-8859-1')
     for line in message:
         for pattern in patterns:
             to_be_replaced = pattern[0]
@@ -85,14 +86,38 @@ def get_credentials():
 
 
 def clear():
-    for i in range(50):
-        print('\n')
+    os.system('cls')
+    # for i in range(50):
+    #     print('\n')
 
 
-print('---------- / Mail Sender \\ ----------')
+accepted = False
+while not accepted:
+    clear()
+    print('---------- / Mail Sender \\ ----------')
+    print('# E-mail service\n')
+    option = input('1. Gmail\n2. Outlook\n\nAnswer: ')
+    if option == '1':
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        server.ehlo()
+        accepted = True
+    elif option == '2':
+        server = smtplib.SMTP('smtp-mail.outlook.com', 587)
+        server.starttls()
+        server.ehlo()
+        accepted = True
 
-print('# Login \n')
-email, password = get_credentials()
+authentication_success = False
+while not authentication_success:
+    try:
+        clear()
+        print('# Login \n')
+        email, password = get_credentials()
+        server.login(email, password)
+        authentication_success = True
+    except smtplib.SMTPAuthenticationError:
+        print('\nServer error, try turn off two-factor security of your e-mail service')
+        time.sleep(3)
 
 clear()
 print('# Subject\n')
@@ -106,29 +131,30 @@ clear()
 print('# Message\n')
 message = get_message()
 
-
-
-server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-server.ehlo()
-server.login(email, password)
-
 # sends e-mail for each recipient
-clear()
-print('# CSV')
-path = input('Type recipients .csv file : ')
+found_file = False
+while not found_file:
+    clear()
+    print('# CSV')
+    try:
+        path = input('Type recipients .csv file : ')
+        prepared_recipients = []
+        for recipient in load_recipients(path):
+            found_file = True
+            prepared_recipient = prepare_recipient(recipient)
+            prepared_recipient = prepare_message(subject, message, prepared_recipient, patterns)
 
-prepared_recipients =[]
-for recipient in load_recipients(path):
-
-    prepared_recipient = prepare_recipient(recipient)
-    prepared_recipient = prepare_message(subject, message, prepared_recipient, patterns)
-
-    prepared_recipients.append(prepared_recipient)
+            prepared_recipients.append(prepared_recipient)
+    except OSError:
+        print('\nFile not found')
+        time.sleep(3)
 
 clear()
 print('{} e-mail(s) queued. \n'.format(len(prepared_recipients)))
 for i in range(len(prepared_recipients)):
-    print('{}. to: {}\n'. format(i + 1, prepared_recipients[i]['email']))
+    print('{}. to: {}\n'.format(i + 1, prepared_recipients[i]['email']))
+
+print('Message: \n\n{}'.format(message))
 
 print('\n')
 print('Are you sure you want to send? (yes/no)')
@@ -136,7 +162,6 @@ resp = input().lower()
 
 if resp == 'yes' or resp == 'y':
     clear()
-
 
     sent_emails = 0
     errors = 0
@@ -158,8 +183,5 @@ if resp == 'yes' or resp == 'y':
         print('All emails sent. No errors')
     else:
         print('{} could be sent. {} errors'.format(sent_emails, errors))
-
-
-
 
 server.quit()
