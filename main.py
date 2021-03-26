@@ -1,8 +1,10 @@
 import csv
-import smtplib
 import os
+import smtplib
 import time
-from getpass import getpass
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
 
 
 def load_recipients(path):
@@ -32,55 +34,33 @@ def prepare_recipient(recipient):
 
 
 def get_message():
-    def add_message():
-        found_file = False
-        while not found_file:
-            clear()
-            print('# Extern message file')
-            path = input('\n File path: ')
-            try:
-                file = open(path, newline='')
-                found_file = True
-                message = file.readlines()
-                return message
-            except OSError:
-                print('\nFile not found')
-                time.sleep(3)
+    found_file = False
+    while not found_file:
+        clear()
+        print('# Extern message file')
+        path = input('\n File path: ')
+        try:
+            file = open(path, encoding='utf-8')
+            found_file = True
+            message = file.readlines()
+            return message
+        except OSError:
+            print('\nFile not found')
+            time.sleep(3)
 
 
-    print(
-        'Type the email, using the patterns. Press Enter for insert new line, type \'-p\' for new paragraph% or '
-        '\'-end\' to finish input ')
-    print('\n(Or type -insert to add extern message file)')
-    message = []
-    line = input()
-    ended = False
-    while not ended:
-        if line == '-end':
-            ended = True
-        elif line == '-p':
-            line = ''
-        elif line == '-insert':
-            message = add_message()
-            ended = True
-        else:
-            message.append(line)
-            line = input()
-
-    return message
-
-
-def prepare_message(subject, message, recipient, patterns):
-    prepared_message = 'Subject: {}\n\n'.format(subject).encode('iso-8859-1')
+def prepare_message(message, recipient, patterns):
+    prepared_message = ''
     for line in message:
         for pattern in patterns:
             to_be_replaced = pattern[0]
             index_of_attribute = int(pattern[1])
             line = line.replace(to_be_replaced, recipient[index_of_attribute])
 
-        prepared_message += (line + '\n').encode('iso-8859-1')
+        prepared_message += line
 
     recipient['message'] = prepared_message
+
 
     return recipient
 
@@ -116,6 +96,7 @@ def clear():
     #     print('\n')
 
 
+# Service choosing
 accepted = False
 while not accepted:
     clear()
@@ -132,6 +113,7 @@ while not accepted:
         server.ehlo()
         accepted = True
 
+# Login in e-mail service
 authentication_success = False
 while not authentication_success:
     try:
@@ -144,19 +126,39 @@ while not authentication_success:
         print('\nServer error, try turn off two-factor security of your e-mail service')
         time.sleep(3)
 
+# Subject
 clear()
 print('# Subject\n')
 subject = input('Subject: ')
 
+# Patterns
 clear()
 print('# Patterns \n')
 patterns = load_patterns()
 
+# Message
 clear()
 print('# Message\n')
 message = get_message()
+msg = MIMEMultipart()
 
-# sends e-mail for each recipient
+# PDF attach
+accepted = False
+while not accepted:
+    clear()
+    print('# PDF')
+    pdf = input('Curriculum Vitae\'s pdf path: ')
+    try:
+        with open(pdf, 'rb') as f:
+            attachment = MIMEApplication(f.read(), _subtype='pdf')
+
+        attachment.add_header('Content-Disposition', 'attachment', filename=str('Curriculum Vitae'))
+        msg.attach(attachment)
+        accepted = True
+    except:
+        print('An error occurred')
+
+# Loads the recipients, checking .csv file
 found_file = False
 while not found_file:
     clear()
@@ -167,20 +169,24 @@ while not found_file:
         for recipient in load_recipients(path):
             found_file = True
             prepared_recipient = prepare_recipient(recipient)
-            prepared_recipient = prepare_message(subject, message, prepared_recipient, patterns)
+            prepared_recipient = prepare_message(message, prepared_recipient, patterns)
 
             prepared_recipients.append(prepared_recipient)
     except OSError:
         print('\nFile not found')
         time.sleep(3)
 
+# Process logging
 clear()
 print('{} e-mail(s) queued. \n'.format(len(prepared_recipients)))
+
 for i in range(len(prepared_recipients)):
     print('{}. to: {}\n'.format(i + 1, prepared_recipients[i]['email']))
 
-print('Message: \n\n{}'.format(message))
+_ = ''
+print('Message: \n\n{}'.format(_.join(message)))
 
+# Confirmation
 print('\n')
 print('Are you sure you want to send? (yes/no)')
 resp = input().lower()
@@ -188,21 +194,31 @@ resp = input().lower()
 if resp == 'yes' or resp == 'y':
     clear()
 
+    # Send email
     sent_emails = 0
     errors = 0
     for prepared_recipient in prepared_recipients:
         print('# Sending...\n')
         print('{}/{} emails sent\n'.format(sent_emails, len(prepared_recipients)))
 
+
+        # MIME setup
+        msg['From'] = email
+        msg['To'] = prepared_recipient['email']
+        msg['Subject'] = subject
+
         try:
-            server.sendmail(email, prepared_recipient['email'], prepared_recipient['message'])
+            body = MIMEText(_.join(prepared_recipient['message']), 'plain')
+            msg.attach(body)
+            server.sendmail(email, prepared_recipient['email'], msg.as_string())
             sent_emails += 1
         except:
             print('An error occurred on mail sending to {}'.format(prepared_recipient['email']))
             errors += 1
 
-        clear()
+    clear()
 
+    # Process logging
     print('\n')
     if sent_emails == len(prepared_recipients):
         print('All emails sent. No errors')
