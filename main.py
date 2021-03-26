@@ -153,7 +153,6 @@ while not accepted:
             attachment = MIMEApplication(f.read(), _subtype='pdf')
 
         attachment.add_header('Content-Disposition', 'attachment', filename=str('Curriculum Vitae'))
-        msg.attach(attachment)
         accepted = True
     except:
         print('An error occurred')
@@ -203,13 +202,19 @@ if resp == 'yes' or resp == 'y':
 
 
         # MIME setup
+
         msg['From'] = email
         msg['To'] = prepared_recipient['email']
         msg['Subject'] = subject
 
         try:
             body = MIMEText(_.join(prepared_recipient['message']), 'plain')
+
+            # Reloads attachments
+            msg.set_payload(None)
+            msg.attach(attachment)
             msg.attach(body)
+
             server.sendmail(email, prepared_recipient['email'], msg.as_string())
             sent_emails += 1
         except:
